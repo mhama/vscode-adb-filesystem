@@ -2,6 +2,8 @@
 
 You can browse the files inside connected Android devices using VSCode!
 
+(experimental implementation)
+
 ## Features
 
 * file system using ADB (adbkit)
