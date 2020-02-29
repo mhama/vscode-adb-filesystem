@@ -11,7 +11,8 @@
 		"Other"
 	],
 	"activationEvents": [
-		"onCommand:adbfs.workspaceInit"
+		"onCommand:adbfs.workspaceInit",
+		"onFileSystem:adbfs"
 	],
 	"main": "./out/extension.js",
 	"author": {
