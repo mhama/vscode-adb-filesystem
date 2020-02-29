@@ -61,5 +61,9 @@
 		"adbkit": "^2.11.1",
 		"concat-stream": "^2.0.0",
 		"streamifier": "^0.1.1"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/mhama/vscode-adb-filesystem.git"
 	}
 }
