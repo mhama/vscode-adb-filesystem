@@ -13,6 +13,8 @@ You can browse the files inside connected Android devices using VSCode!
   * read file
   * write file
   * delete file
+  * rename file/directory
+  * create directory
 
 ![example](images/example1.png)
 
