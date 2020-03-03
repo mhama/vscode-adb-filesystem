@@ -170,8 +170,6 @@ export class AdbFS implements vscode.FileSystemProvider {
             catch(err) {
                 reject(err);
             }
-            //adbClient.shell("mv "+path+" "+newPath).then...
-            reject("rename not implemented yet.");
         });
         return thenable;
     }
