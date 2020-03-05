@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
-var adb = require('adbkit')
-var adbClient = adb.createClient()
-var concatStream = require('concat-stream');
-var streamifier = require('streamifier');
+import { Stats } from 'fs';
+const adb = require('adbkit');
+const adbClient = adb.createClient();
+const concatStream = require('concat-stream');
+const streamifier = require('streamifier');
 
 export class AdbEntry implements vscode.FileStat {
 
@@ -20,6 +21,18 @@ export class AdbEntry implements vscode.FileStat {
         this.size = 0;
         this.name = name;
     }
+
+    static fromStats(stats: Stats): AdbEntry {
+        let entryType = stats.isFile() ? vscode.FileType.File : vscode.FileType.Directory;
+        let entry = new AdbEntry("", entryType);
+        if (stats.isFile()) {
+            entry.size = stats.size;
+        }
+        if (stats.mtime != null) {
+            entry.mtime = stats.mtime.getTime();
+        }
+        return entry;
+    }
 }
 
 export class AdbFS implements vscode.FileSystemProvider {
@@ -36,12 +49,8 @@ export class AdbFS implements vscode.FileSystemProvider {
                 return;
             }
             try {
-                let stats = await adbClient.stat(adbpath.deviceId, adbpath.path);
-                let entryType = stats.isFile() ? vscode.FileType.File : vscode.FileType.Directory;
-                let entry = new AdbEntry("", entryType);
-                if (stats.isFile()) {
-                    entry.size = stats.size;
-                }
+                let stats = await adbClient.stat(adbpath.deviceId, adbpath.path) as Stats;
+                let entry = AdbEntry.fromStats(stats);
                 console.log("stat entry:", entry);
                 resolve(entry);
             }
