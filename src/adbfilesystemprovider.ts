@@ -174,12 +174,28 @@ export class AdbFS implements vscode.FileSystemProvider {
         return thenable;
     }
 
+    async deleteEmptyDir(uri: vscode.Uri, resolve: any, reject: any) {
+        let adbPath = this.splitAdbPath(uri);
+        let cmd = "rmdir \""+adbPath.path+"\"";
+        console.log("delete dir adb cmd: "+cmd);
+        try {
+            await adbClient.shell(adbPath.deviceId, cmd);
+            // wait a bit for the change to be settled.
+            await this.timeout(300);
+            resolve();
+        }
+        catch(err) {
+            reject(err);
+        }
+    }
+
     delete(uri: vscode.Uri): Thenable<void> {
         let thenable = new Promise<void>(async (resolve, reject) => {
             try {
                 let stats = await this.stat(uri);
-                if (stats.type != vscode.FileType.File) {
-                    reject("delete directory not implemented yet.");
+                if (stats.type == vscode.FileType.Directory) {
+                    this.deleteEmptyDir(uri, resolve, reject);
+                    return;
                 }
                 let adbPath = this.splitAdbPath(uri);
                 let cmd = "rm \""+adbPath.path+"\"";
