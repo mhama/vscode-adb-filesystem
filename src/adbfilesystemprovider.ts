@@ -188,7 +188,14 @@ export class AdbFS implements vscode.FileSystemProvider {
         let cmd = "rmdir \""+adbPath.path+"\"";
         console.log("delete dir adb cmd: "+cmd);
         try {
-            await adbClient.shell(adbPath.deviceId, cmd);
+            const buf = await adbClient.shell(adbPath.deviceId, cmd)
+            const output = await adb.util.readAll(buf);
+            const msg: string = output.toString().trim();
+            console.log('shell output: %s', msg)
+            if (msg.endsWith(": Directory not empty")) {
+                reject("non-empty directory can't be deleted.");
+                return;
+            }
             // wait a bit for the change to be settled.
             await this.timeout(300);
             resolve();
