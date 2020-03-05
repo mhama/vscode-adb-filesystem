@@ -2,7 +2,7 @@
 	"name": "adb-filesystem",
 	"displayName": "ADB File System",
 	"description": "file system for connected android devices, using adb",
-	"version": "0.0.2",
+	"version": "0.0.3",
 	"publisher": "MakotoHamanaka",
 	"engines": {
 		"vscode": "^1.42.0"
