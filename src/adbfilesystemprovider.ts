@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { Stats } from 'fs';
-const adb = require('adbkit');
+import adb from '@devicefarmer/adbkit';
+//const adb = require('adbkit');
 const adbClient = adb.createClient();
 const concatStream = require('concat-stream');
 const streamifier = require('streamifier');
@@ -49,27 +50,31 @@ export class AdbFS implements vscode.FileSystemProvider {
                 return;
             }
             try {
-                let stats = await adbClient.stat(adbpath.deviceId, adbpath.path) as Stats;
+                const device = adbClient.getDevice(adbpath.deviceId);
+                let stats = await device.stat(adbpath.path) as Stats;
                 let entry = AdbEntry.fromStats(stats);
                 console.log("stat entry:", entry);
                 resolve(entry);
             }
             catch(err) {
+                /*
                 if (err.code == "ENOENT") {
                     console.log("ENOENT received.");
                     reject(vscode.FileSystemError.FileNotFound(uri));
                     return;
                 }
+                */
+                console.error('Something went wrong on stat:', err);
                 reject(err);
             }
         });
         return thenable;
     }
 
-    async readDevices(resolve: (value?: [string, vscode.FileType][] | PromiseLike<[string, vscode.FileType][]> | undefined) => void, reject : any) {
+    async readDevices(resolve: (value: [string, vscode.FileType][] | PromiseLike<[string, vscode.FileType][]>) => void, reject : any) {
         console.log("adbfs readDevices called.");
         try {
-            let devices = await adbClient.listDevices()
+            let devices = await adbClient.listDevices();
             console.log("listDevices result received.", devices);
             let entries: [string, vscode.FileType][] = [];
             entries = devices.map((device: any) => {
@@ -79,7 +84,8 @@ export class AdbFS implements vscode.FileSystemProvider {
             resolve(entries);
         }
         catch (err) {
-            console.error('Something went wrong:', err.stack)
+            //console.error('Something went wrong:', err.stack)
+            console.error('Something went wrong on listDevices:', err);
             reject(""+err);
         }
     }
@@ -95,7 +101,8 @@ export class AdbFS implements vscode.FileSystemProvider {
 
             console.log("deviceId:"+adbpath.deviceId+" path:"+adbpath.path);
             try {
-                let files = await adbClient.readdir(adbpath.deviceId, adbpath.path)
+                const device = adbClient.getDevice(adbpath.deviceId);
+                let files = await device.readdir(adbpath.path)
                 console.log("readdir files:", files);
                 let entries: [string, vscode.FileType][] = [];
                 entries = files.map((file: any) => {
@@ -116,7 +123,8 @@ export class AdbFS implements vscode.FileSystemProvider {
         let thenable = new Promise<Uint8Array>(async (resolve, reject) => {
             var adbpath = this.splitAdbPath(uri);
             try {
-                var transfer = await adbClient.pull(adbpath.deviceId, adbpath.path)
+                const device = adbClient.getDevice(adbpath.deviceId);
+                var transfer = await device.pull(adbpath.path)
                 var writable = concatStream({
                     encoding: 'uint8array'
                 }, (data: any) => {
@@ -138,7 +146,8 @@ export class AdbFS implements vscode.FileSystemProvider {
             console.log("writeFile uri:" + uri+ " path:"+adbPath.path);
             let stream = streamifier.createReadStream(Buffer.from(content));
             try {
-                await adbClient.push(adbPath.deviceId, stream, adbPath.path)
+                let device = adbClient.getDevice(adbPath.deviceId);
+                await device.push(stream, adbPath.path)
                 console.log("writeFile succeeded.");
                 resolve();
             }
@@ -171,7 +180,8 @@ export class AdbFS implements vscode.FileSystemProvider {
                     reject("renaming inter-device?");
                     return;
                 }
-                await adbClient.shell(adbPathOld.deviceId, "mv \""+adbPathOld.path+"\" \""+adbPathNew.path+"\"")
+                let device = adbClient.getDevice(adbPathOld.deviceId);
+                await device.shell("mv \""+adbPathOld.path+"\" \""+adbPathNew.path+"\"")
                 // wait a bit for the change to be settled.
                 await this.timeout(300);
                 resolve();
@@ -188,7 +198,8 @@ export class AdbFS implements vscode.FileSystemProvider {
         let cmd = "rmdir \""+adbPath.path+"\"";
         console.log("delete dir adb cmd: "+cmd);
         try {
-            const buf = await adbClient.shell(adbPath.deviceId, cmd)
+            let device = adbClient.getDevice(adbPath.deviceId);
+            const buf = await device.shell(cmd)
             const output = await adb.util.readAll(buf);
             const msg: string = output.toString().trim();
             console.log('shell output: %s', msg)
@@ -216,7 +227,8 @@ export class AdbFS implements vscode.FileSystemProvider {
                 let adbPath = this.splitAdbPath(uri);
                 let cmd = "rm \""+adbPath.path+"\"";
                 console.log("delete file adb cmd: "+cmd);
-                await adbClient.shell(adbPath.deviceId, cmd);
+                let device = adbClient.getDevice(adbPath.deviceId);
+                await device.shell(cmd);
                 // wait a bit for the change to be settled.
                 await this.timeout(300);
                 resolve();
@@ -235,7 +247,8 @@ export class AdbFS implements vscode.FileSystemProvider {
             let cmd = "mkdir \""+adbPath.path+"\"";
             console.log("create dir adb cmd: "+cmd);
             try {
-                await adbClient.shell(adbPath.deviceId, cmd);
+                let device = adbClient.getDevice(adbPath.deviceId);
+                await device.shell(cmd);
                 // wait a bit for the change to be settled.
                 await this.timeout(300);
                 resolve();
