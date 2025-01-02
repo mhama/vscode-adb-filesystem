@@ -50,7 +50,9 @@
 		"@stylistic/eslint-plugin": "^2.9.0",
 		"@types/glob": "^7.1.1",
 		"@types/mocha": "^10.0.10",
+		"@types/bluebird": "^3.5.33",
 		"@types/node": "^18.15.11",
+		"@types/node-forge": "^1.0.1",
 		"@types/vscode": "^1.73.0",
 		"eslint": "^9.17.0",
 		"glob": "^7.1.4",
@@ -61,7 +63,7 @@
 		"webpack-cli": "^6.0.1"
 	},
 	"dependencies": {
-		"@devicefarmer/adbkit": "file:../devicefarmer_adbkit",
+		"@devicefarmer/adbkit": "^3.3.8",
 		"bluebird": "^3.7.0",
 		"concat-stream": "^2.0.0",
 		"streamifier": "^0.1.1"
