@@ -49,6 +49,10 @@ export class AdbFS implements vscode.FileSystemProvider {
                 resolve(entry);
                 return;
             }
+            if (adbpath.deviceId == ".vscode") {
+                reject("invalid device name \".vscode\"");
+                return;
+            }
             try {
                 const device = adbClient.getDevice(adbpath.deviceId);
                 let stats = await device.stat(adbpath.path) as Stats;
