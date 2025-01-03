@@ -107,7 +107,7 @@ export class AdbFS implements vscode.FileSystemProvider {
                 const files = await device.readdir(adbpath.path)
                 console.log("readdir files:", files);
                 let entries: [string, vscode.FileType][] = [];
-                entries = files.map((file: any) => {
+                entries = files.map((file) => {
                     const entryType = file.isFile() ? vscode.FileType.File : vscode.FileType.Directory;
                     return [file.name, entryType];
                 });
@@ -143,7 +143,7 @@ export class AdbFS implements vscode.FileSystemProvider {
         return thenable;
     }
 
-    writeFile(uri: vscode.Uri, content: Uint8Array, options: { create: boolean, overwrite: boolean }): Thenable<void> {
+    writeFile(uri: vscode.Uri, content: Uint8Array, _options: { create: boolean, overwrite: boolean }): Thenable<void> {
         const thenable = new Promise<void>(async (resolve, reject) => {
             const adbPath = this.splitAdbPath(uri);
             console.log("writeFile uri:" + uri+ " path:"+adbPath.path);
@@ -164,7 +164,7 @@ export class AdbFS implements vscode.FileSystemProvider {
 
     // overwrite option is not implemented.
 
-    rename(oldUri: vscode.Uri, newUri: vscode.Uri, options: { overwrite: boolean }): Thenable<void> {
+    rename(oldUri: vscode.Uri, newUri: vscode.Uri, _options: { overwrite: boolean }): Thenable<void> {
         const thenable = new Promise<void>(async (resolve, reject) => {
             try {
                 await this.stat(oldUri);
