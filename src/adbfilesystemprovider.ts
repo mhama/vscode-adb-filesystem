@@ -1,9 +1,8 @@
 import * as vscode from 'vscode';
 import { Stats } from 'fs';
-const adb = require('adbkit');
+import adb from '@devicefarmer/adbkit';
 const adbClient = adb.createClient();
-const concatStream = require('concat-stream');
-const streamifier = require('streamifier');
+import { Readable } from 'stream';
 
 export class AdbEntry implements vscode.FileStat {
 
@@ -23,8 +22,8 @@ export class AdbEntry implements vscode.FileStat {
     }
 
     static fromStats(stats: Stats): AdbEntry {
-        let entryType = stats.isFile() ? vscode.FileType.File : vscode.FileType.Directory;
-        let entry = new AdbEntry("", entryType);
+        const entryType = stats.isFile() ? vscode.FileType.File : vscode.FileType.Directory;
+        const entry = new AdbEntry("", entryType);
         if (stats.isFile()) {
             entry.size = stats.size;
         }
@@ -38,68 +37,78 @@ export class AdbEntry implements vscode.FileStat {
 export class AdbFS implements vscode.FileSystemProvider {
 
     stat(uri: vscode.Uri): Thenable<vscode.FileStat> {
-        let thenable = new Promise<vscode.FileStat>(async (resolve, reject) => {
+        const thenable = new Promise<vscode.FileStat>(async (resolve, reject) => {
             console.log("(promise) stat uri:" + uri);
-            var adbpath = this.splitAdbPath(uri);
+            const adbpath = this.splitAdbPath(uri);
             console.log("deviceId:" + adbpath.deviceId + " path:" + adbpath.path);
             // check device parent dir
             if (adbpath.deviceId == "" || adbpath.deviceId == null) {
-                let entry = new AdbEntry("(devices)", vscode.FileType.Directory);
+                const entry = new AdbEntry("(devices)", vscode.FileType.Directory);
                 resolve(entry);
                 return;
             }
+            if (adbpath.deviceId == ".vscode") {
+                reject("invalid device name \".vscode\"");
+                return;
+            }
             try {
-                let stats = await adbClient.stat(adbpath.deviceId, adbpath.path) as Stats;
-                let entry = AdbEntry.fromStats(stats);
+                const device = adbClient.getDevice(adbpath.deviceId);
+                const stats = await device.stat(adbpath.path) as Stats;
+                const entry = AdbEntry.fromStats(stats);
                 console.log("stat entry:", entry);
                 resolve(entry);
             }
             catch(err) {
+                /*
                 if (err.code == "ENOENT") {
                     console.log("ENOENT received.");
                     reject(vscode.FileSystemError.FileNotFound(uri));
                     return;
                 }
+                */
+                console.error('Something went wrong on stat:', err);
                 reject(err);
             }
         });
         return thenable;
     }
 
-    async readDevices(resolve: (value?: [string, vscode.FileType][] | PromiseLike<[string, vscode.FileType][]> | undefined) => void, reject : any) {
+    async readDevices(resolve: (value: [string, vscode.FileType][] | PromiseLike<[string, vscode.FileType][]>) => void, reject : any) {
         console.log("adbfs readDevices called.");
         try {
-            let devices = await adbClient.listDevices()
+            const devices = await adbClient.listDevices();
             console.log("listDevices result received.", devices);
             let entries: [string, vscode.FileType][] = [];
-            entries = devices.map((device: any) => {
+            entries = devices.map((device) => {
                 return [device.id, vscode.FileType.Directory];
             });
             console.log("entries:", entries);
             resolve(entries);
         }
         catch (err) {
-            console.error('Something went wrong:', err.stack)
+            //console.error('Something went wrong:', err.stack)
+            console.error('Something went wrong on listDevices:', err);
             reject(""+err);
         }
     }
 
     readDirectory(uri: vscode.Uri): Thenable<[string, vscode.FileType][]> {
-        let thenable = new Promise<[string, vscode.FileType][]>(async (resolve, reject) => {
+        const thenable = new Promise<[string, vscode.FileType][]>(async (resolve, reject) => {
             console.log("(promise) readDirectoryAdb uri:"+uri);
             if (uri.path == "/") {
                 this.readDevices(resolve, reject);
                 return;
             }
-            var adbpath = this.splitAdbPath(uri);
+            const adbpath = this.splitAdbPath(uri);
 
             console.log("deviceId:"+adbpath.deviceId+" path:"+adbpath.path);
             try {
-                let files = await adbClient.readdir(adbpath.deviceId, adbpath.path)
+                const device = adbClient.getDevice(adbpath.deviceId);
+                const files = await device.readdir(adbpath.path)
                 console.log("readdir files:", files);
                 let entries: [string, vscode.FileType][] = [];
-                entries = files.map((file: any) => {
-                    let entryType = file.isFile() ? vscode.FileType.File : vscode.FileType.Directory;
+                entries = files.map((file) => {
+                    const entryType = file.isFile() ? vscode.FileType.File : vscode.FileType.Directory;
                     return [file.name, entryType];
                 });
                 console.log("readdir entries:", entries);
@@ -113,17 +122,19 @@ export class AdbFS implements vscode.FileSystemProvider {
     }
 
     readFile(uri: vscode.Uri): Thenable<Uint8Array> {
-        let thenable = new Promise<Uint8Array>(async (resolve, reject) => {
-            var adbpath = this.splitAdbPath(uri);
+        const thenable = new Promise<Uint8Array>(async (resolve, reject) => {
+            const adbpath = this.splitAdbPath(uri);
             try {
-                var transfer = await adbClient.pull(adbpath.deviceId, adbpath.path)
-                var writable = concatStream({
-                    encoding: 'uint8array'
-                }, (data: any) => {
-                    resolve(data);
+                const device = adbClient.getDevice(adbpath.deviceId);
+                const transfer = await device.pull(adbpath.path);
+                const chunks: Buffer[] = [];
+                transfer.on('data', (chunk: Buffer) => {
+                    chunks.push(chunk);
                 });
-                transfer.on('error', reject)
-                transfer.pipe(writable);
+                transfer.on('error', reject);
+                transfer.on('end', () => {
+                    resolve(new Uint8Array(Buffer.concat(chunks)));
+                });
             }
             catch(err) {
                 reject(err);
@@ -132,13 +143,15 @@ export class AdbFS implements vscode.FileSystemProvider {
         return thenable;
     }
 
-    writeFile(uri: vscode.Uri, content: Uint8Array, options: { create: boolean, overwrite: boolean }): Thenable<void> {
-        let thenable = new Promise<void>(async (resolve, reject) => {
-            let adbPath = this.splitAdbPath(uri);
+    writeFile(uri: vscode.Uri, content: Uint8Array, _options: { create: boolean, overwrite: boolean }): Thenable<void> {
+        const thenable = new Promise<void>(async (resolve, reject) => {
+            const adbPath = this.splitAdbPath(uri);
             console.log("writeFile uri:" + uri+ " path:"+adbPath.path);
-            let stream = streamifier.createReadStream(Buffer.from(content));
+            //let stream = streamifier.createReadStream(Buffer.from(content));
+            const stream = Readable.from(content);
             try {
-                await adbClient.push(adbPath.deviceId, stream, adbPath.path)
+                const device = adbClient.getDevice(adbPath.deviceId);
+                await device.push(stream, adbPath.path)
                 console.log("writeFile succeeded.");
                 resolve();
             }
@@ -151,13 +164,13 @@ export class AdbFS implements vscode.FileSystemProvider {
 
     // overwrite option is not implemented.
 
-    rename(oldUri: vscode.Uri, newUri: vscode.Uri, options: { overwrite: boolean }): Thenable<void> {
-        let thenable = new Promise<void>(async (resolve, reject) => {
+    rename(oldUri: vscode.Uri, newUri: vscode.Uri, _options: { overwrite: boolean }): Thenable<void> {
+        const thenable = new Promise<void>(async (resolve, reject) => {
             try {
-                let stats = await this.stat(oldUri);
+                await this.stat(oldUri);
                 console.log("oldUri:"+oldUri+" newUri:"+newUri);
                 try {
-                    let stats = await this.stat(newUri);
+                    await this.stat(newUri);
                     // if stats exist, can't rename.
                     reject("target file name already exists.")
                 }
@@ -165,13 +178,14 @@ export class AdbFS implements vscode.FileSystemProvider {
                     // better to pass only "file not found" error.
                 }
                 console.log("let's mv!");
-                let adbPathOld = this.splitAdbPath(oldUri);
-                let adbPathNew = this.splitAdbPath(newUri);
+                const adbPathOld = this.splitAdbPath(oldUri);
+                const adbPathNew = this.splitAdbPath(newUri);
                 if (adbPathOld.deviceId != adbPathNew.deviceId) {
                     reject("renaming inter-device?");
                     return;
                 }
-                await adbClient.shell(adbPathOld.deviceId, "mv \""+adbPathOld.path+"\" \""+adbPathNew.path+"\"")
+                const device = adbClient.getDevice(adbPathOld.deviceId);
+                await device.shell("mv \""+adbPathOld.path+"\" \""+adbPathNew.path+"\"")
                 // wait a bit for the change to be settled.
                 await this.timeout(300);
                 resolve();
@@ -184,11 +198,12 @@ export class AdbFS implements vscode.FileSystemProvider {
     }
 
     async deleteEmptyDir(uri: vscode.Uri, resolve: any, reject: any) {
-        let adbPath = this.splitAdbPath(uri);
-        let cmd = "rmdir \""+adbPath.path+"\"";
+        const adbPath = this.splitAdbPath(uri);
+        const cmd = "rmdir \""+adbPath.path+"\"";
         console.log("delete dir adb cmd: "+cmd);
         try {
-            const buf = await adbClient.shell(adbPath.deviceId, cmd)
+            const device = adbClient.getDevice(adbPath.deviceId);
+            const buf = await device.shell(cmd)
             const output = await adb.util.readAll(buf);
             const msg: string = output.toString().trim();
             console.log('shell output: %s', msg)
@@ -206,17 +221,18 @@ export class AdbFS implements vscode.FileSystemProvider {
     }
 
     delete(uri: vscode.Uri): Thenable<void> {
-        let thenable = new Promise<void>(async (resolve, reject) => {
+        const thenable = new Promise<void>(async (resolve, reject) => {
             try {
-                let stats = await this.stat(uri);
+                const stats = await this.stat(uri);
                 if (stats.type == vscode.FileType.Directory) {
                     this.deleteEmptyDir(uri, resolve, reject);
                     return;
                 }
-                let adbPath = this.splitAdbPath(uri);
-                let cmd = "rm \""+adbPath.path+"\"";
+                const adbPath = this.splitAdbPath(uri);
+                const cmd = "rm \""+adbPath.path+"\"";
                 console.log("delete file adb cmd: "+cmd);
-                await adbClient.shell(adbPath.deviceId, cmd);
+                const device = adbClient.getDevice(adbPath.deviceId);
+                await device.shell(cmd);
                 // wait a bit for the change to be settled.
                 await this.timeout(300);
                 resolve();
@@ -229,13 +245,14 @@ export class AdbFS implements vscode.FileSystemProvider {
     }
 
     createDirectory(uri: vscode.Uri): Thenable<void> {
-        let thenable = new Promise<void>(async (resolve, reject) => {
+        const thenable = new Promise<void>(async (resolve, reject) => {
             console.log("createDirectory uri:" + uri);
-            let adbPath = this.splitAdbPath(uri);
-            let cmd = "mkdir \""+adbPath.path+"\"";
+            const adbPath = this.splitAdbPath(uri);
+            const cmd = "mkdir \""+adbPath.path+"\"";
             console.log("create dir adb cmd: "+cmd);
             try {
-                await adbClient.shell(adbPath.deviceId, cmd);
+                const device = adbClient.getDevice(adbPath.deviceId);
+                await device.shell(cmd);
                 // wait a bit for the change to be settled.
                 await this.timeout(300);
                 resolve();
@@ -253,11 +270,11 @@ export class AdbFS implements vscode.FileSystemProvider {
     // TODO: implement onDidChangeFile
 
     splitAdbPath(uri: vscode.Uri) {
-        let parts = uri.path.split('/');
+        const parts = uri.path.split('/');
         if (parts[0] == '') {
             parts.shift();
         }
-        let deviceId = parts[0];
+        const deviceId = parts[0];
         parts.shift();
         let path = parts.join("/");
         if (path == "") {
