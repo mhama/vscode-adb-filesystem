@@ -9,7 +9,7 @@ You can browse the files inside the connected Android devices using VSCode!
 * file system using ADB (adbkit)
   * browse devices
   * browse directries
-    * currently under /sdcard folder only.
+    * under /sdcard folder only, if `Sdcard Folder Only Mode` is set (default).
   * read file
   * write file
   * rename file/directory
@@ -36,11 +36,11 @@ You can browse the files inside the connected Android devices using VSCode!
 
 ## Extension Settings
 
-* No settings available
+* `Sdcard Folder Only Mode` setting (default: true)
 
-## Known Issues
+ If this flag is set, adbfs shows files inside '/sdcard' folder only. Usually good for android smartphones but inaccessible to folders outside '/sdcard'
 
-* Currently, only files or folders under the `/sdcard` folder are available.
+  Even if this flag is true, it falls back to all-file mode if no /sdcard exists on the device.
 
 ## Release Notes
 

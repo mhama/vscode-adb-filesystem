@@ -100,14 +100,29 @@ export class AdbFS implements vscode.FileSystemProvider {
                 return;
             }
             const adbpath = this.splitAdbPath(uri);
-
             console.log("deviceId:"+adbpath.deviceId+" path:"+adbpath.path);
+
+            //let entries: [string, vscode.FileType][] = [];
+
             try {
                 const device = adbClient.getDevice(adbpath.deviceId);
-                const files = await device.readdir(adbpath.path)
+                const files = await device.readdir(adbpath.path);
+                const sdcardDir = files.find(file => file.name === "sdcard" && !file.isFile());
+
+                // sdcard mode
+                // only show contents inside /sdcard folder if sdcardFolderAsRoot setting is true.
+                if ((adbpath.path === "/" || adbpath.path === "")) {
+                    console.log("getSdcardFolderAsRootSetting(): " + getSdcardFolderOnlyModeSetting() + " sdcardDir:" + sdcardDir);
+                    if (getSdcardFolderOnlyModeSetting() && sdcardDir != undefined) {
+                        console.log("returns /sdcard directory only");
+                        const entries : [string, vscode.FileType][] = [["sdcard", vscode.FileType.Directory]];
+                        resolve(entries);
+                        return;
+                    }
+                }
+
                 console.log("readdir files:", files);
-                let entries: [string, vscode.FileType][] = [];
-                entries = files.map((file) => {
+                const entries : [string, vscode.FileType][] = files.map((file) => {
                     const entryType = file.isFile() ? vscode.FileType.File : vscode.FileType.Directory;
                     return [file.name, entryType];
                 });
@@ -277,10 +292,11 @@ export class AdbFS implements vscode.FileSystemProvider {
         const deviceId = parts[0];
         parts.shift();
         let path = parts.join("/");
-        if (path == "") {
-            path = "/sdcard";
+
+        if (path === "" || path === undefined) {
+            path = "/";
         } else {
-            path = "/sdcard/" + path;
+            path = "/" + path;
         }
         return { "deviceId": deviceId, "path": path };
     }
@@ -293,4 +309,9 @@ export class AdbFS implements vscode.FileSystemProvider {
     timeout(ms: number) {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
+}
+
+function getSdcardFolderOnlyModeSetting() : boolean
+{
+	return (vscode.workspace.getConfiguration('adbfs')?.get<boolean>("sdcardFolderOnlyMode") ?? true);
 }

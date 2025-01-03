@@ -9,4 +9,6 @@
   * implemented deletion of empty directory
 - 0.0.4
   * use @devicefarmer/adbkit instead of original adbkit (coffee script implementation)
-  * use newer version of TypeScript etc.
+  * use newer version of TypeScript etc
+- 0.0.5
+  * add the setting of `Sdcard Folder Only Mode`

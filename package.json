@@ -2,7 +2,7 @@
 	"name": "adb-filesystem",
 	"displayName": "ADB File System",
 	"description": "file system for connected android devices, using adb",
-	"version": "0.0.4",
+	"version": "0.0.5",
 	"publisher": "MakotoHamanaka",
 	"engines": {
 		"vscode": "^1.73.0"
@@ -35,6 +35,16 @@
 					"when": "workbenchState != workspace"
 				}
 			]
+		},
+		"configuration": {
+			"title": "ADB FileSystem",
+			"properties": {
+				"adbfs.sdcardFolderOnlyMode": {
+					"type": "boolean",
+					"default": "true",
+					"description": "Show files inside '/sdcard' folder only. Usually good for android smartphones but inaccessible to folders outside '/sdcard'"
+				}
+			}
 		}
 	},
 	"scripts": {
