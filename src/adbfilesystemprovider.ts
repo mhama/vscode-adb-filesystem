@@ -1,10 +1,8 @@
 import * as vscode from 'vscode';
 import { Stats } from 'fs';
 import adb from '@devicefarmer/adbkit';
-//const adb = require('adbkit');
 const adbClient = adb.createClient();
-const concatStream = require('concat-stream');
-const streamifier = require('streamifier');
+import { Readable } from 'stream';
 
 export class AdbEntry implements vscode.FileStat {
 
@@ -124,18 +122,19 @@ export class AdbFS implements vscode.FileSystemProvider {
     }
 
     readFile(uri: vscode.Uri): Thenable<Uint8Array> {
-        let thenable = new Promise<Uint8Array>(async (resolve, reject) => {
-            var adbpath = this.splitAdbPath(uri);
+        const thenable = new Promise<Uint8Array>(async (resolve, reject) => {
+            const adbpath = this.splitAdbPath(uri);
             try {
                 const device = adbClient.getDevice(adbpath.deviceId);
-                var transfer = await device.pull(adbpath.path)
-                var writable = concatStream({
-                    encoding: 'uint8array'
-                }, (data: any) => {
-                    resolve(data);
+                const transfer = await device.pull(adbpath.path);
+                const chunks: Buffer[] = [];
+                transfer.on('data', (chunk: Buffer) => {
+                    chunks.push(chunk);
                 });
-                transfer.on('error', reject)
-                transfer.pipe(writable);
+                transfer.on('error', reject);
+                transfer.on('end', () => {
+                    resolve(new Uint8Array(Buffer.concat(chunks)));
+                });
             }
             catch(err) {
                 reject(err);
@@ -145,12 +144,13 @@ export class AdbFS implements vscode.FileSystemProvider {
     }
 
     writeFile(uri: vscode.Uri, content: Uint8Array, options: { create: boolean, overwrite: boolean }): Thenable<void> {
-        let thenable = new Promise<void>(async (resolve, reject) => {
-            let adbPath = this.splitAdbPath(uri);
+        const thenable = new Promise<void>(async (resolve, reject) => {
+            const adbPath = this.splitAdbPath(uri);
             console.log("writeFile uri:" + uri+ " path:"+adbPath.path);
-            let stream = streamifier.createReadStream(Buffer.from(content));
+            //let stream = streamifier.createReadStream(Buffer.from(content));
+            const stream = Readable.from(content);
             try {
-                let device = adbClient.getDevice(adbPath.deviceId);
+                const device = adbClient.getDevice(adbPath.deviceId);
                 await device.push(stream, adbPath.path)
                 console.log("writeFile succeeded.");
                 resolve();
