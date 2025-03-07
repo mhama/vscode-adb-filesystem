@@ -35,14 +35,14 @@ export class AdbEntry implements vscode.FileStat {
 }
 
 export class AdbFS implements vscode.FileSystemProvider {
-    private tracker: any;
-    private _emitter = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
-    readonly onDidChangeFile: vscode.Event<vscode.FileChangeEvent[]> = this._emitter.event;
+    private _deviceTracker: any;
+    private _changeFileEmitter = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
+    readonly onDidChangeFile: vscode.Event<vscode.FileChangeEvent[]> = this._changeFileEmitter.event;
 
     async dispose() {
-        if (this.tracker) {
+        if (this._deviceTracker) {
             try {
-                await this.tracker.end();
+                await this._deviceTracker.end();
             } catch (err) {
                 console.error('Error disposing tracker:', err);
             }
@@ -50,7 +50,7 @@ export class AdbFS implements vscode.FileSystemProvider {
     }
 
     private notifyRootChange(): void {
-        this._emitter.fire([{ 
+        this._changeFileEmitter.fire([{ 
             type: vscode.FileChangeType.Changed, 
             uri: vscode.Uri.parse('adb:/') 
         }]);
@@ -59,23 +59,23 @@ export class AdbFS implements vscode.FileSystemProvider {
 
     async initializeDeviceTracking() {
         try {
-            this.tracker = await adbClient.trackDevices();
+            this._deviceTracker = await adbClient.trackDevices();
             
-            this.tracker.on('add', async (device: any) => {
+            this._deviceTracker.on('add', async (device: any) => {
                 console.log('Device %s was plugged in', device.id);
                 this.notifyRootChange();
             });
 
-            this.tracker.on('remove', async (device: any) => {
+            this._deviceTracker.on('remove', async (device: any) => {
                 console.log('Device %s was unplugged', device.id);
                 this.notifyRootChange();
             });
 
-            this.tracker.on('end', () => {
+            this._deviceTracker.on('end', () => {
                 console.log('Tracking stopped');
             });
 
-            this.tracker.on('error', (err: Error) => {
+            this._deviceTracker.on('error', (err: Error) => {
                 console.error('Tracking error:', err);
             });
 
