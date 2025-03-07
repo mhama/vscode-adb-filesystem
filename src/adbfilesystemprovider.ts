@@ -35,6 +35,54 @@ export class AdbEntry implements vscode.FileStat {
 }
 
 export class AdbFS implements vscode.FileSystemProvider {
+    private _deviceTracker: any;
+    private _changeFileEmitter = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
+    readonly onDidChangeFile: vscode.Event<vscode.FileChangeEvent[]> = this._changeFileEmitter.event;
+
+    async dispose() {
+        if (this._deviceTracker) {
+            try {
+                await this._deviceTracker.end();
+            } catch (err) {
+                console.error('Error disposing tracker:', err);
+            }
+        }
+    }
+
+    private notifyRootChange(): void {
+        this._changeFileEmitter.fire([{ 
+            type: vscode.FileChangeType.Changed, 
+            uri: vscode.Uri.parse('adb:/') 
+        }]);
+        vscode.commands.executeCommand('workbench.files.action.refreshFilesExplorer');
+    }
+
+    async initializeDeviceTracking() {
+        try {
+            this._deviceTracker = await adbClient.trackDevices();
+            
+            this._deviceTracker.on('add', async (device: any) => {
+                console.log('Device %s was plugged in', device.id);
+                this.notifyRootChange();
+            });
+
+            this._deviceTracker.on('remove', async (device: any) => {
+                console.log('Device %s was unplugged', device.id);
+                this.notifyRootChange();
+            });
+
+            this._deviceTracker.on('end', () => {
+                console.log('Tracking stopped');
+            });
+
+            this._deviceTracker.on('error', (err: Error) => {
+                console.error('Tracking error:', err);
+            });
+
+        } catch (err) {
+            console.error('Tracker initialization error:', err);
+        }
+    }
 
     stat(uri: vscode.Uri): Thenable<vscode.FileStat> {
         const thenable = new Promise<vscode.FileStat>(async (resolve, reject) => {
@@ -278,11 +326,6 @@ export class AdbFS implements vscode.FileSystemProvider {
         });
         return thenable;
     }
-
-    private _emitter = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
-    readonly onDidChangeFile: vscode.Event<vscode.FileChangeEvent[]> = this._emitter.event;
-
-    // TODO: implement onDidChangeFile
 
     splitAdbPath(uri: vscode.Uri) {
         const parts = uri.path.split('/');
