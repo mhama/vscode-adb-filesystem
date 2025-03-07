@@ -12,18 +12,28 @@ export function activate(context: vscode.ExtensionContext) {
     console.log('"adb-filesystem" become active.');
 
     const adbfs = new AdbFS();
-    context.subscriptions.push(vscode.workspace.registerFileSystemProvider('adbfs', adbfs, { isCaseSensitive: true }));
-    context.subscriptions.push(vscode.commands.registerCommand('adbfs.workspaceInit', _ => {
-        vscode.workspace.updateWorkspaceFolders(0, 0, { uri: vscode.Uri.parse('adbfs:/'), name: "Android Device Files" });
-    }));
-
+    context.subscriptions.push(
+        vscode.workspace.registerFileSystemProvider('adbfs', adbfs, {
+            isCaseSensitive: true
+        })
+    );
+    context.subscriptions.push(
+        vscode.commands.registerCommand('adbfs.workspaceInit', _ => {
+            vscode.workspace.updateWorkspaceFolders(0, 0, {
+                uri: vscode.Uri.parse('adbfs:/'),
+                name: "Android Device Files"
+            });
+        })
+    );
     // refresh file tree when the setting changed.
-    context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(e => {
-        if (e.affectsConfiguration('adbfs.sdcardFolderOnlyMode')) {
-            console.log("onDidChangeConfiguration called.");
-            vscode.commands.executeCommand("workbench.files.action.refreshFilesExplorer")
-        }
-    }));
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeConfiguration(e => {
+            if (e.affectsConfiguration('adbfs.sdcardFolderOnlyMode')) {
+                console.log("onDidChangeConfiguration called.");
+                vscode.commands.executeCommand("workbench.files.action.refreshFilesExplorer")
+            }
+        })
+    );
 }
 
 // this method is called when your extension is deactivated
